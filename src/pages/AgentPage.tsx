@@ -134,7 +134,12 @@ export function AgentPage() {
         html += renderSources(data.sources)
       }
       setMessages((prev) => prev.map((item) => (item.id === thinkingId ? { ...item, html } : item)))
-      history.current = [...history.current, { role: 'user', content: question }, { role: 'assistant', content: data.answer || '' }].slice(-12)
+      const nextHistory: ChatTurn[] = [
+        ...history.current,
+        { role: 'user', content: question },
+        { role: 'assistant', content: data.answer || '' },
+      ]
+      history.current = nextHistory.slice(-12)
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Сбой соединения'
       setMessages((prev) => prev.map((item) => (item.id === thinkingId ? { ...item, html: `<span class="err-text">${escapeHtml(message)}</span>` } : item)))
