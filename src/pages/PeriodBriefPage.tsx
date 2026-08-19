@@ -218,8 +218,6 @@ export function PeriodBriefPage() {
       await loadAttachmentLibrary()
       await loadPromptVariant('full')
     })()
-    // initial load only
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -231,7 +229,6 @@ export function PeriodBriefPage() {
       await loadPeriodSources()
       await loadPromptVariant(briefKind)
     })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodStart, periodEnd])
 
   useEffect(() => {

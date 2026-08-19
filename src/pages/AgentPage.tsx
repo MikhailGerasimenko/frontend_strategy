@@ -143,6 +143,22 @@ export function AgentPage() {
     }
   }
 
+  const askRef = useRef(ask)
+  askRef.current = ask
+
+  useEffect(() => {
+    const root = logRef.current
+    if (!root) return
+    const onLogClick = (event: MouseEvent) => {
+      const btn = (event.target as HTMLElement).closest('[data-full]')
+      if (!btn) return
+      const ref = btn.getAttribute('data-full')
+      if (ref) void askRef.current(`Покажи новость ${ref} целиком`)
+    }
+    root.addEventListener('click', onLogClick)
+    return () => root.removeEventListener('click', onLogClick)
+  }, [messages])
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
@@ -220,16 +236,7 @@ export function AgentPage() {
       </Card>
 
       <Card className={styles.chatCard}>
-        <div
-          className={styles.log}
-          ref={logRef}
-          onClick={(event) => {
-            const btn = (event.target as HTMLElement).closest('[data-full]')
-            if (!btn) return
-            const ref = btn.getAttribute('data-full')
-            if (ref) void ask(`Покажи новость ${ref} целиком`)
-          }}
-        >
+        <div className={styles.log} ref={logRef}>
           {messages.map((item) => (
             <div key={item.id} className={`${styles.msg} ${item.role === 'user' ? styles.user : styles.assistant}`}>
               <div className={styles.bubble} dangerouslySetInnerHTML={{ __html: item.html }} />
