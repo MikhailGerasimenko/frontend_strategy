@@ -1,6 +1,6 @@
 import { errorDetail } from '~/lib/errors'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? ''
+const API_BASE = (typeof process !== 'undefined' && process.env.VITE_API_BASE) || ''
 
 export class ApiError extends Error {
   status: number
