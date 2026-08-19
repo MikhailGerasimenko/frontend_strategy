@@ -1,0 +1,7 @@
+# Проект использует шаблон Sever Steel Solution 
+# https://git.severstal.severstalgroup.com/sales-and-supply/templates-sss
+include:
+  - project: '${SSS_V3_CI_TEMPLATE_PROJECT}'
+    file:
+      - 'node.yml'
+      # - 'node-yarn.yml'

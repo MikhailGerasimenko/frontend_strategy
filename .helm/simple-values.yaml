@@ -1,0 +1,35 @@
+global:
+  image:
+    repository: docker.repo.severstal.severstalgroup.com/nginx
+    tag: 1.13
+
+secrets:
+  enabled: true
+  projectNamespace: ""
+  backend: "eso-vault-backend"
+  files: {}
+  tls:
+    common: false
+
+deployment:
+  replicas: 1
+  reloadOnChange:
+    enabled: true
+
+service:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+
+ingress:
+  enabled: true
+  className: nginx-internal
+  annotations: {}
+  host: generic-app.severstal.com
+  paths:
+    - path: /
+      port: 8080
+  tls: true

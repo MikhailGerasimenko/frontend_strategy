@@ -1,0 +1,272 @@
+.help {
+  color: var(--theme-text-secondary, #5c6b7a);
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+}
+
+.row,
+.toolbar,
+.period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.row label,
+.period label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+input[type='date'],
+input[type='file'],
+textarea {
+  font-family: inherit;
+}
+
+input[type='date'] {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--theme-border-primary, #d8dee6);
+  border-radius: 8px;
+  background: var(--theme-background-primary, #fff);
+  color: var(--theme-text-body);
+}
+
+textarea {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  padding: 0.75rem;
+  border: 1px solid var(--theme-border-primary, #d8dee6);
+  border-radius: 8px;
+  resize: vertical;
+  min-height: 220px;
+  background: var(--theme-background-primary, #fff);
+  color: var(--theme-text-body);
+}
+
+.statusBar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.ok {
+  background: #d1fae5;
+  color: #0d7a4a;
+}
+
+.err {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.hint {
+  color: var(--theme-text-secondary, #5c6b7a);
+  font-size: 0.9rem;
+}
+
+.okText {
+  color: #0d7a4a;
+}
+
+.warnText {
+  color: #9a6700;
+}
+
+.errText {
+  color: #b91c1c;
+}
+
+.uploadHint {
+  white-space: pre-line;
+  font-size: 0.85rem;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.collapseHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.25rem 0;
+  border: none;
+  background: transparent;
+  color: var(--theme-text-heading, #003876);
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chevron {
+  display: inline-flex;
+  width: 1.1rem;
+  justify-content: center;
+}
+
+.collapsed .chevron {
+  transform: rotate(-90deg);
+}
+
+.countBadge {
+  margin-left: auto;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--theme-text-secondary, #5c6b7a);
+}
+
+.tableWrap {
+  max-height: min(22rem, 45vh);
+  overflow: auto;
+  margin: 0.75rem 0;
+  border: 1px solid var(--theme-border-primary, #d8dee6);
+  border-radius: 8px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.table th,
+.table td {
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid var(--theme-border-primary, #d8dee6);
+  text-align: left;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: var(--theme-background-primary, #f8fafc);
+}
+
+.sep {
+  align-self: flex-end;
+  padding-bottom: 0.4rem;
+  color: var(--theme-text-heading, #003876);
+}
+
+.coverage {
+  display: flex;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: #eef4fa;
+}
+
+.ready {
+  background: #e8f5ee;
+}
+
+.warn {
+  background: #fff8e6;
+}
+
+.missing {
+  background: #fdeeee;
+}
+
+.coverageIcon {
+  width: 1.35rem;
+  height: 1.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 700;
+  background: rgba(0, 85, 164, 0.12);
+}
+
+.coverage p {
+  margin: 0;
+}
+
+.model {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--theme-background-primary, #f4f6f8);
+  border: 1px solid var(--theme-border-primary, #d4e0eb);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9rem;
+}
+
+.progressWrap {
+  height: 8px;
+  background: #e8eef5;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+.progressBar {
+  height: 100%;
+  width: 0;
+  background: var(--theme-control-primary-default, #003876);
+}
+
+.running {
+  width: 70%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.done {
+  width: 100%;
+  background: #0d7a4a;
+}
+
+.failed {
+  width: 100%;
+  background: #b91c1c;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+.jobStatus {
+  font-weight: 600;
+}
+
+.log {
+  background: #1a2332;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  max-height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
