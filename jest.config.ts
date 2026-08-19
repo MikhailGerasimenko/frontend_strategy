@@ -8,6 +8,7 @@ import type { Config } from 'jest'
 const config: Config = {
   clearMocks: true,
   testEnvironment: 'jsdom',
+  setupFiles: ['<rootDir>/jest/polyfills.ts'],
   testPathIgnorePatterns: ['\\\\node_modules\\\\'],
   coveragePathIgnorePatterns: ['\\\\node_modules\\\\'],
   moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx', 'json', 'node'],
