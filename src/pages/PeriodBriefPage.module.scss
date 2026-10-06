@@ -304,6 +304,13 @@ textarea {
   font-weight: 600;
 }
 
+.downloadLink {
+  align-self: center;
+  font-size: 0.85rem;
+  color: var(--theme-control-primary-default, #003876);
+  text-decoration: underline;
+}
+
 .mapDigestSelect {
   min-width: min(100%, 22rem);
   padding: 0.45rem 0.6rem;

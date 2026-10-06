@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
-import { apiFetch, apiJson, apiPath, jsonBody } from '~/api/client'
+import { apiFetch, apiJson, jsonBody, mapDigestsDocxPath } from '~/api/client'
 import type {
   AttachmentDoc,
   AttachmentMeta,
@@ -300,12 +300,13 @@ export function PeriodBriefPage() {
     const res = await apiFetch(`/api/weekly/default-prompt?variant=${encodeURIComponent(variant)}`, { method: 'DELETE' })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setPromptDefaultHint((data as { detail?: string }).detail || 'Не удалось сбросить дефолт.', 'err')
+      setPromptDefaultHint((data as { detail?: string }).detail || 'Не удалось сбросить дефолт.')
       setPromptDefaultHintKind('err')
       return
     }
     await loadPromptVariant(variant)
-    setPromptDefaultHint('Возвращён общий дефолтный промпт.', 'ok')
+    setPromptDefaultHint('Возвращён общий дефолтный промпт.')
+    setPromptDefaultHintKind('ok')
   }
 
   const saveCleanupPromptDefault = async () => {
@@ -324,7 +325,7 @@ export function PeriodBriefPage() {
     )
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setCleanupPromptHint((data as { detail?: string }).detail || 'Не удалось сохранить дефолт.', 'err')
+      setCleanupPromptHint((data as { detail?: string }).detail || 'Не удалось сохранить дефолт.')
       setCleanupPromptHintKind('err')
       return
     }
@@ -338,12 +339,12 @@ export function PeriodBriefPage() {
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setCleanupPromptHint((data as { detail?: string }).detail || 'Не удалось сбросить дефолт.', 'err')
+      setCleanupPromptHint((data as { detail?: string }).detail || 'Не удалось сбросить дефолт.')
       setCleanupPromptHintKind('err')
       return
     }
-    await loadCleanupPrompt(briefKind)
-    setCleanupPromptHint('Возвращён общий дефолтный clean-up prompt.', 'ok')
+    await loadCleanupPrompt(briefKind || 'full')
+    setCleanupPromptHint('Возвращён общий дефолтный clean-up prompt.')
     setCleanupPromptHintKind('ok')
   }
 
@@ -1087,9 +1088,9 @@ export function PeriodBriefPage() {
             >
               {mapDigestCopyLabel}
             </Button>
-            <Button size='sm' onClick={() => (window.location.href = apiPath(`/api/jobs/${jobId}/map-digests.docx`))}>
+            <a className={styles.downloadLink} href={mapDigestsDocxPath(jobId)} download>
               Скачать все батчи Word
-            </Button>
+            </a>
             {mapDigestMeta ? <span className={styles.hint}>{mapDigestMeta}</span> : null}
           </div>
           <pre className={styles.mapDigestBody}>{mapDigestBody}</pre>
