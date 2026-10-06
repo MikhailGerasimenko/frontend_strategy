@@ -417,7 +417,6 @@ export function PeriodBriefPage() {
       await reducePromptCtl.load()
       await loadPromptVariant('full')
     })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- начальная загрузка один раз
   }, [])
 
   useEffect(() => {
