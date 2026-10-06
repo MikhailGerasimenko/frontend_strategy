@@ -1,8 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
-import { apiFetch, apiJson, jsonBody } from '~/api/client'
-import type { AttachmentDoc, AttachmentMeta, HealthStatus, Job, PeriodSource } from '~/api/types'
+import { apiFetch, apiJson, apiPath, jsonBody } from '~/api/client'
+import type {
+  AttachmentDoc,
+  AttachmentMeta,
+  CleanupBriefResponse,
+  HealthStatus,
+  Job,
+  MapDigestDetail,
+  MapDigestSummaryItem,
+  PeriodSource,
+  WeeklyDefaultPromptResponse,
+  WeeklyStagePromptResponse,
+} from '~/api/types'
+import { useStagePrompt } from '~/hooks/useStagePrompt'
 import { Button } from '~/components/ui/Button'
 import { Card } from '~/components/ui/Card'
 import {
@@ -11,7 +23,14 @@ import {
   DOC_SOURCE_NAMES,
   formatAttachmentPeriod,
 } from '~/lib/attachments'
-import { BRIEF_KIND_LABELS, DEFAULT_BRIEF_KIND_MATCH, DEFAULT_BRIEF_LABELS, isMonthlyBriefKind } from '~/lib/brief'
+import {
+  BRIEF_KIND_LABELS,
+  DEFAULT_BRIEF_KIND_MATCH,
+  DEFAULT_BRIEF_LABELS,
+  isMonthlyBriefKind,
+  joinBriefPrompt,
+  resolveBriefPromptFields,
+} from '~/lib/brief'
 import { formatCreatedAt, yesterdayRange } from '~/lib/dates'
 import { SourceGroups } from '~/pages/brief/SourceGroups'
 
@@ -41,6 +60,21 @@ export function PeriodBriefPage() {
   const [briefLabels, setBriefLabels] = useState(DEFAULT_BRIEF_LABELS)
   const [briefKind, setBriefKind] = useState('full')
   const [systemPrompt, setSystemPrompt] = useState('')
+  const [userPrompt, setUserPrompt] = useState('')
+  const [promptDefaultHint, setPromptDefaultHint] = useState('')
+  const [promptDefaultHintKind, setPromptDefaultHintKind] = useState('')
+  const [cleanupPrompt, setCleanupPrompt] = useState('')
+  const [cleanupPromptHint, setCleanupPromptHint] = useState('')
+  const [cleanupPromptHintKind, setCleanupPromptHintKind] = useState('')
+  const [mapDigestItems, setMapDigestItems] = useState<MapDigestSummaryItem[]>([])
+  const [mapDigestCurrent, setMapDigestCurrent] = useState(1)
+  const [mapDigestBody, setMapDigestBody] = useState('—')
+  const [mapDigestMeta, setMapDigestMeta] = useState('')
+  const [mapDigestsVisible, setMapDigestsVisible] = useState(false)
+  const [mapDigestCopyLabel, setMapDigestCopyLabel] = useState('Скопировать')
+  const mapDigestCacheRef = useRef<Map<number, MapDigestDetail>>(new Map())
+  const mapPromptCtl = useStagePrompt('/api/weekly/map-prompt', 'map', 'промпт фактографа')
+  const reducePromptCtl = useStagePrompt('/api/weekly/reduce-prompt', 'reduce', 'промпт склейки')
   const [coverage, setCoverage] = useState({ message: '', state: '' as CoverageState })
   const [busy, setBusy] = useState(false)
   const [jobId, setJobId] = useState<string | null>(null)
@@ -197,18 +231,180 @@ export function PeriodBriefPage() {
     setAttachmentStatus(`Всего: ${docs.length}`)
   }, [filterByPeriod, pdfDate, pdfEnd])
 
+  const loadCleanupPrompt = useCallback(async (kind: string) => {
+    const data = await apiJson<WeeklyStagePromptResponse & { prompt?: string }>(
+      `/api/weekly/cleanup-prompt?brief_kind=${encodeURIComponent(kind || 'full')}`,
+    )
+    setCleanupPrompt(data.prompt || '')
+    setCleanupPromptHint(
+      data.customized
+        ? 'Для clean-up сохранён ваш дефолтный промпт.'
+        : 'Используется общий дефолтный prompt clean-up.',
+    )
+    setCleanupPromptHintKind(data.customized ? 'ok' : '')
+  }, [])
+
   const loadPromptVariant = useCallback(
     async (variant: string) => {
       const params = new URLSearchParams({ variant })
       if (periodStart) params.set('period_start', periodStart)
       if (periodEnd) params.set('period_end', periodEnd)
-      const data = await apiJson<{ prompt?: string; variant?: string }>(`/api/weekly/default-prompt?${params.toString()}`)
-      setSystemPrompt(data.prompt || '')
-      setBriefKind(data.variant || variant)
-      await loadPeriodSources(true, data.variant || variant)
+      const data = await apiJson<WeeklyDefaultPromptResponse>(`/api/weekly/default-prompt?${params.toString()}`)
+      const parts = resolveBriefPromptFields(data)
+      setSystemPrompt(parts.system_prompt)
+      setUserPrompt(parts.user_prompt)
+      setPromptDefaultHint(
+        data.customized ? 'Для этого типа сохранён ваш дефолтный промпт.' : 'Используется общий дефолтный промпт.',
+      )
+      setPromptDefaultHintKind(data.customized ? 'ok' : '')
+      const nextKind = data.variant || variant
+      setBriefKind(nextKind)
+      await loadCleanupPrompt(nextKind)
+      await loadPeriodSources(true, nextKind)
       await checkCoverage()
     },
-    [periodStart, periodEnd, loadPeriodSources, checkCoverage],
+    [periodStart, periodEnd, loadPeriodSources, checkCoverage, loadCleanupPrompt],
+  )
+
+  const savePromptDefault = async () => {
+    const system = systemPrompt.trim()
+    const user = userPrompt.trim()
+    const prompt = joinBriefPrompt(system, user)
+    if (prompt.length < 50) {
+      setPromptDefaultHint('Промпт слишком короткий.')
+      setPromptDefaultHintKind('err')
+      return
+    }
+    const res = await apiFetch(
+      '/api/weekly/default-prompt',
+      jsonBody({
+        variant: briefKind || 'full',
+        system_prompt: system,
+        user_prompt: user,
+      }),
+    )
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setPromptDefaultHint((data as { detail?: string }).detail || 'Не удалось сохранить дефолт.')
+      setPromptDefaultHintKind('err')
+      return
+    }
+    setPromptDefaultHint('Сохранено как ваш дефолтный промпт для этого типа.')
+    setPromptDefaultHintKind('ok')
+    await mapPromptCtl.saveIfDirty()
+    await reducePromptCtl.saveIfDirty()
+  }
+
+  const resetPromptDefault = async () => {
+    const variant = briefKind || 'full'
+    const res = await apiFetch(`/api/weekly/default-prompt?variant=${encodeURIComponent(variant)}`, { method: 'DELETE' })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setPromptDefaultHint((data as { detail?: string }).detail || 'Не удалось сбросить дефолт.', 'err')
+      setPromptDefaultHintKind('err')
+      return
+    }
+    await loadPromptVariant(variant)
+    setPromptDefaultHint('Возвращён общий дефолтный промпт.', 'ok')
+  }
+
+  const saveCleanupPromptDefault = async () => {
+    const prompt = cleanupPrompt.trim()
+    if (prompt.length < 50) {
+      setCleanupPromptHint('Промпт слишком короткий.')
+      setCleanupPromptHintKind('err')
+      return
+    }
+    const res = await apiFetch(
+      '/api/weekly/cleanup-prompt',
+      jsonBody({
+        variant: `cleanup::${briefKind || 'full'}`,
+        prompt,
+      }),
+    )
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setCleanupPromptHint((data as { detail?: string }).detail || 'Не удалось сохранить дефолт.', 'err')
+      setCleanupPromptHintKind('err')
+      return
+    }
+    setCleanupPromptHint('Сохранено как ваш дефолтный clean-up prompt.')
+    setCleanupPromptHintKind('ok')
+  }
+
+  const resetCleanupPromptDefault = async () => {
+    const res = await apiFetch(`/api/weekly/cleanup-prompt?brief_kind=${encodeURIComponent(briefKind || 'full')}`, {
+      method: 'DELETE',
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setCleanupPromptHint((data as { detail?: string }).detail || 'Не удалось сбросить дефолт.', 'err')
+      setCleanupPromptHintKind('err')
+      return
+    }
+    await loadCleanupPrompt(briefKind)
+    setCleanupPromptHint('Возвращён общий дефолтный clean-up prompt.', 'ok')
+    setCleanupPromptHintKind('ok')
+  }
+
+  const hideMapDigests = useCallback(() => {
+    setMapDigestsVisible(false)
+    setMapDigestItems([])
+    setMapDigestCurrent(1)
+    setMapDigestBody('—')
+    setMapDigestMeta('')
+    mapDigestCacheRef.current = new Map()
+  }, [])
+
+  const showMapDigest = useCallback(
+    async (jobId: string, index: number, items: MapDigestSummaryItem[]) => {
+      if (!jobId || !items.length) return
+      const total = items.length
+      const safeIndex = Math.min(Math.max(1, Number(index) || 1), total)
+      setMapDigestCurrent(safeIndex)
+      const cached = mapDigestCacheRef.current.get(safeIndex)
+      if (cached) {
+        setMapDigestBody(cached.content || '(пустой дайджест)')
+        setMapDigestMeta(`${cached.materials ?? '—'} материалов · ${(cached.content || '').length} символов`)
+        return
+      }
+      setMapDigestBody('Загрузка…')
+      try {
+        const data = await apiJson<MapDigestDetail>(`/api/jobs/${jobId}/map-digests/${safeIndex}`)
+        mapDigestCacheRef.current.set(safeIndex, data)
+        setMapDigestBody(data.content || '(пустой дайджест)')
+        setMapDigestMeta(`${data.materials ?? '—'} материалов · ${(data.content || '').length} символов`)
+      } catch {
+        setMapDigestBody('Сбой соединения при загрузке дайджеста')
+      }
+    },
+    [],
+  )
+
+  const renderMapDigestsSummary = useCallback(
+    (jobId: string, items: MapDigestSummaryItem[]) => {
+      if (!items.length) {
+        hideMapDigests()
+        return
+      }
+      mapDigestCacheRef.current = new Map()
+      setMapDigestItems(items)
+      setMapDigestsVisible(true)
+      void showMapDigest(jobId, Number(items[0].index) || 1, items)
+    },
+    [hideMapDigests, showMapDigest],
+  )
+
+  const loadMapDigests = useCallback(
+    async (id: string) => {
+      try {
+        const data = await apiJson<{ items?: MapDigestSummaryItem[] }>(`/api/jobs/${id}/map-digests`)
+        renderMapDigestsSummary(id, data.items || [])
+      } catch {
+        hideMapDigests()
+      }
+    },
+    [hideMapDigests, renderMapDigestsSummary],
   )
 
   useEffect(() => {
@@ -216,8 +412,11 @@ export function PeriodBriefPage() {
       await loadHealth()
       await loadPeriodSources()
       await loadAttachmentLibrary()
+      await mapPromptCtl.load()
+      await reducePromptCtl.load()
       await loadPromptVariant('full')
     })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- начальная загрузка один раз
   }, [])
 
   useEffect(() => {
@@ -261,6 +460,12 @@ export function PeriodBriefPage() {
         if (next.result?.brief_kind) setBriefKind(next.result.brief_kind)
         setBriefContent(content)
         setShowEditor(Boolean(content))
+        const summary = next.result?.map_digests_summary
+        if (Array.isArray(summary) && summary.length) {
+          renderMapDigestsSummary(jobId, summary)
+        } else {
+          void loadMapDigests(jobId)
+        }
         setBusy(false)
         setStopping(false)
       } else if (next.status === 'failed' || next.status === 'cancelled') {
@@ -274,7 +479,7 @@ export function PeriodBriefPage() {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [jobId])
+  }, [jobId, loadMapDigests, renderMapDigestsSummary])
 
   const fileTypeHint = (() => {
     if (!files.length) return 'Тип подставится сам: PMI / PDF отчёт / Kallanish (в т.ч. из .txt).'
@@ -344,8 +549,40 @@ export function PeriodBriefPage() {
     await checkCoverage()
   }
 
+  const cleanupBrief = async () => {
+    if (!jobId) {
+      window.alert('Сначала сгенерируйте бриф.')
+      return
+    }
+    const content = briefContent.trim()
+    if (content.length < 50) {
+      window.alert('Текст брифа слишком короткий.')
+      return
+    }
+    setExportKind('')
+    setExportHint('LLM clean-up выполняется…')
+    setBusy(true)
+    const res = await apiFetch(
+      `/api/jobs/${jobId}/cleanup-brief`,
+      jsonBody({ content, system_prompt: cleanupPrompt.trim() || null }),
+    )
+    const data = (await res.json().catch(() => ({}))) as CleanupBriefResponse & { detail?: string }
+    setBusy(false)
+    if (!res.ok) {
+      setExportKind('err')
+      setExportHint(data.detail || `Ошибка ${res.status}`)
+      window.alert(data.detail || `Ошибка ${res.status}`)
+      return
+    }
+    setBriefContent(data.content || content)
+    setExportKind(data.cleanup_pass ? 'ok' : '')
+    setExportHint(
+      data.cleanup_pass ? 'Clean-up готов: текст обновлён.' : 'Clean-up завершён: оставлен исходный текст.',
+    )
+  }
+
   const startBrief = async () => {
-    const prompt = systemPrompt.trim()
+    const prompt = joinBriefPrompt(systemPrompt, userPrompt)
     if (prompt.length < 50) {
       window.alert('Промпт слишком короткий.')
       return
@@ -365,10 +602,14 @@ export function PeriodBriefPage() {
       )
       return
     }
+    await mapPromptCtl.saveIfDirty()
+    await reducePromptCtl.saveIfDirty()
     const payload: Record<string, unknown> = {
       period_start: periodStart,
       period_end: periodEnd,
       system_prompt: prompt,
+      map_system_prompt: mapPromptCtl.valueForRequest(),
+      reduce_instructions: reducePromptCtl.valueForRequest(),
       model: null,
       brief_kind: briefKind,
       attachment_ids: selectedAttachmentIds,
@@ -379,6 +620,7 @@ export function PeriodBriefPage() {
     setBriefContent('')
     setExportHint('')
     setJob(null)
+    hideMapDigests()
     const res = await apiFetch('/api/jobs/weekly-brief', jsonBody(payload))
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
@@ -663,8 +905,10 @@ export function PeriodBriefPage() {
         />
       </Card>
 
-      <Card id='promptPanel' title='3. Системный промпт'>
-        <p className={styles.help}>Шаблоны брифа. Смена типа меняет только промпт и набор источников — период (С/По) не трогается.</p>
+      <Card id='promptPanel' title='3. Промпты брифа'>
+        <p className={styles.help}>
+          Шаблоны брифа. Смена типа подставляет обе части. Источники пользователь выбирает сам. При генерации обе половины склеиваются в один промпт.
+        </p>
         <div className={styles.toolbar}>
           <Button onClick={() => void loadPromptVariant('full')} disabled={busy}>
             Полный бриф
@@ -683,7 +927,83 @@ export function PeriodBriefPage() {
           </Button>
         </div>
         <p className={styles.hint}>Тип брифа: {BRIEF_KIND_LABELS[briefKind] || briefKind}</p>
-        <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={16} placeholder='Системный промпт…' />
+        <p className={styles.fieldLabel}>
+          <strong>Системный промпт</strong>
+        </p>
+        <p className={styles.help}>Роль, стиль, критические требования — всё до блока «ОБЯЗАТЕЛЬНАЯ СТРУКТУРА».</p>
+        <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={12} placeholder='Системный промпт…' />
+        <p className={styles.fieldLabel}>
+          <strong>Пользовательский промпт</strong>
+        </p>
+        <p className={styles.help}>
+          Обязательная структура отчёта — нижнее поле. Граница ищется по заголовку («ОБЯЗАТЕЛЬНАЯ СТРУКТУРА», «Структура отчета», ##-заголовок или нумерации «0./1. …»). При сохранении «мой дефолт» две части хранятся раздельно, поэтому кастомные промпты не слетают после перезагрузки.
+        </p>
+        <textarea value={userPrompt} onChange={(e) => setUserPrompt(e.target.value)} rows={14} placeholder='ОБЯЗАТЕЛЬНАЯ СТРУКТУРА…' />
+        <div className={styles.toolbar}>
+          <Button size='sm' onClick={() => void savePromptDefault()} disabled={busy}>
+            Сделать моим дефолтом
+          </Button>
+          <Button size='sm' onClick={() => void resetPromptDefault()} disabled={busy}>
+            Сбросить мой дефолт
+          </Button>
+          <span className={`${styles.hint} ${promptDefaultHintKind === 'ok' ? styles.okText : ''} ${promptDefaultHintKind === 'err' ? styles.errText : ''}`}>
+            {promptDefaultHint}
+          </span>
+        </div>
+
+        <details className={styles.promptAdvanced} open={mapPromptCtl.detailsOpen}>
+          <summary>
+            <strong>Промпт фактографа (map-этап)</strong>
+          </summary>
+          <p className={styles.help}>
+            Этим промптом модель обрабатывает каждый батч новостей и собирает фактографический дайджест (даты, цифры, компании, ссылки на источники). Затем дайджесты идут в основной промпт брифа. Промпт общий для всех типов брифа и сохраняется отдельно на вашего пользователя (кнопка ниже, автосохранение при уходе из поля и при запуске брифа). Обязательно сохраняйте формат ссылок «[n]» — иначе список источников в конце брифа не соберётся.
+          </p>
+          <textarea
+            value={mapPromptCtl.value}
+            onChange={(e) => mapPromptCtl.setValue(e.target.value)}
+            onBlur={mapPromptCtl.onBlur}
+            rows={14}
+            placeholder='Промпт фактографа…'
+          />
+          <div className={styles.toolbar}>
+            <Button size='sm' onClick={() => void mapPromptCtl.saveDefault()} disabled={busy}>
+              Сделать моим дефолтом
+            </Button>
+            <Button size='sm' onClick={() => void mapPromptCtl.resetDefault()} disabled={busy}>
+              Сбросить мой дефолт
+            </Button>
+            <span className={`${styles.hint} ${mapPromptCtl.hintKind === 'ok' ? styles.okText : ''} ${mapPromptCtl.hintKind === 'err' ? styles.errText : ''}`}>
+              {mapPromptCtl.hint}
+            </span>
+          </div>
+        </details>
+
+        <details className={styles.promptAdvanced} open={reducePromptCtl.detailsOpen}>
+          <summary>
+            <strong>Промпт склейки (reduce-этап)</strong>
+          </summary>
+          <p className={styles.help}>
+            Инструкции, с которыми модель собирает дайджесты всех батчей в ОДИН итоговый бриф. Структура и тон берутся из промптов брифа выше — здесь только правила склейки (дедупликация, перенос цифр в разделы, запрет выдумывать). Период, тип брифа, правила по ссылкам «[n]» и сами дайджесты система добавляет автоматически. Промпт общий для всех типов брифа и сохраняется на вашего пользователя (кнопка ниже, автосохранение при уходе из поля и при запуске брифа).
+          </p>
+          <textarea
+            value={reducePromptCtl.value}
+            onChange={(e) => reducePromptCtl.setValue(e.target.value)}
+            onBlur={reducePromptCtl.onBlur}
+            rows={10}
+            placeholder='Инструкции reduce-этапа…'
+          />
+          <div className={styles.toolbar}>
+            <Button size='sm' onClick={() => void reducePromptCtl.saveDefault()} disabled={busy}>
+              Сделать моим дефолтом
+            </Button>
+            <Button size='sm' onClick={() => void reducePromptCtl.resetDefault()} disabled={busy}>
+              Сбросить мой дефолт
+            </Button>
+            <span className={`${styles.hint} ${reducePromptCtl.hintKind === 'ok' ? styles.okText : ''} ${reducePromptCtl.hintKind === 'err' ? styles.errText : ''}`}>
+              {reducePromptCtl.hint}
+            </span>
+          </div>
+        </details>
       </Card>
 
       <Card title='4. Модель'>
@@ -715,15 +1035,97 @@ export function PeriodBriefPage() {
         </Card>
       ) : null}
 
+      {mapDigestsVisible && jobId && mapDigestItems.length ? (
+        <Card title={`Результаты map-этапа по батчам (${mapDigestItems.length})`}>
+          <p className={styles.help}>Что фактограф вывел по каждому батчу материалов до сборки финального брифа. Выберите батч, чтобы прочитать его дайджест.</p>
+          <div className={styles.mapDigestToolbar}>
+            <label className={styles.mapDigestLabel}>
+              Батч
+              <select
+                className={styles.mapDigestSelect}
+                value={String(mapDigestCurrent)}
+                onChange={(e) => void showMapDigest(jobId, Number(e.target.value), mapDigestItems)}
+              >
+                {mapDigestItems.map((item, i) => {
+                  const index = Number(item.index) || i + 1
+                  const materials = Number(item.materials) || 0
+                  const chars = Number(item.chars) || 0
+                  const total = mapDigestItems.length
+                  return (
+                    <option key={index} value={index}>
+                      {`Батч ${index} из ${total} · ${materials} материалов · ${Math.round(chars / 1000)}k симв.`}
+                    </option>
+                  )
+                })}
+              </select>
+            </label>
+            <Button size='sm' disabled={mapDigestCurrent <= 1} onClick={() => void showMapDigest(jobId, mapDigestCurrent - 1, mapDigestItems)} title='Предыдущий батч'>
+              ←
+            </Button>
+            <Button
+              size='sm'
+              disabled={mapDigestCurrent >= mapDigestItems.length}
+              onClick={() => void showMapDigest(jobId, mapDigestCurrent + 1, mapDigestItems)}
+              title='Следующий батч'
+            >
+              →
+            </Button>
+            <Button
+              size='sm'
+              onClick={() => {
+                const item = mapDigestCacheRef.current.get(mapDigestCurrent)
+                const text = item?.content || ''
+                if (!text) return
+                void navigator.clipboard.writeText(text).then(
+                  () => {
+                    setMapDigestCopyLabel('Скопировано')
+                    window.setTimeout(() => setMapDigestCopyLabel('Скопировать'), 1500)
+                  },
+                  () => setMapDigestCopyLabel('Не удалось скопировать'),
+                )
+              }}
+            >
+              {mapDigestCopyLabel}
+            </Button>
+            <Button size='sm' onClick={() => (window.location.href = apiPath(`/api/jobs/${jobId}/map-digests.docx`))}>
+              Скачать все батчи Word
+            </Button>
+            {mapDigestMeta ? <span className={styles.hint}>{mapDigestMeta}</span> : null}
+          </div>
+          <pre className={styles.mapDigestBody}>{mapDigestBody}</pre>
+        </Card>
+      ) : null}
+
       {showEditor ? (
         <Card title='6. Редактирование брифа'>
           <p className={styles.help}>
             {monthly
-              ? 'Проверьте и поправьте текст. Word — для рассылки, JSON — структурированные слайды для презентации.'
-              : 'Проверьте и поправьте текст. Затем нажмите «Скачать Word» — файл соберётся уже с вашими правками.'}
+              ? 'Проверьте и поправьте текст. При необходимости нажмите LLM clean-up, затем Word или JSON для презентации.'
+              : 'Проверьте и поправьте текст. При необходимости нажмите LLM clean-up, затем «Скачать Word».'}
           </p>
-          <textarea value={briefContent} onChange={(e) => setBriefContent(e.target.value)} rows={22} />
+          <p className={styles.fieldLabel}>
+            <strong>Промпт для LLM clean-up</strong>
+          </p>
+          <p className={styles.help}>Этот промпт используется только когда вы нажимаете LLM clean-up в предпросмотре.</p>
+          <textarea value={cleanupPrompt} onChange={(e) => setCleanupPrompt(e.target.value)} rows={10} placeholder='Промпт для clean-up…' />
           <div className={styles.toolbar}>
+            <Button size='sm' onClick={() => void saveCleanupPromptDefault()} disabled={busy}>
+              Сделать моим дефолтом
+            </Button>
+            <Button size='sm' onClick={() => void resetCleanupPromptDefault()} disabled={busy}>
+              Сбросить мой дефолт
+            </Button>
+            <span
+              className={`${styles.hint} ${cleanupPromptHintKind === 'ok' ? styles.okText : ''} ${cleanupPromptHintKind === 'err' ? styles.errText : ''}`}
+            >
+              {cleanupPromptHint}
+            </span>
+          </div>
+          <textarea value={briefContent} onChange={(e) => setBriefContent(e.target.value)} rows={22} placeholder='Текст брифа появится после генерации…' />
+          <div className={styles.toolbar}>
+            <Button onClick={() => void cleanupBrief()} disabled={busy}>
+              LLM clean-up
+            </Button>
             <Button variant='primary' onClick={() => void exportDocx()} disabled={busy}>
               Скачать Word
             </Button>

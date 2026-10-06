@@ -270,3 +270,58 @@ textarea {
   overflow: auto;
   white-space: pre-wrap;
 }
+
+.fieldLabel {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+.promptAdvanced {
+  margin-top: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--theme-border-primary, #d8dee6);
+
+  summary {
+    cursor: pointer;
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+  }
+}
+
+.mapDigestToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.mapDigestLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.mapDigestSelect {
+  min-width: min(100%, 22rem);
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--theme-border-primary, #d8dee6);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  background: var(--theme-background-primary, #fff);
+}
+
+.mapDigestBody {
+  background: #1a2332;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  max-height: min(24rem, 50vh);
+  overflow: auto;
+  white-space: pre-wrap;
+  margin: 0;
+}

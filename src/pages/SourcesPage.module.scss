@@ -67,6 +67,24 @@
   display: flex;
   gap: 0.4rem;
   justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.mutedName {
+  font-size: 0.78rem;
+  color: var(--theme-text-secondary, #5c6b7a);
+  margin-top: 0.15rem;
+}
+
+.customBadge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #e8f0fe;
+  color: #1e4a8a;
 }
 
 .log {

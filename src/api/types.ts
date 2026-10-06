@@ -24,6 +24,32 @@ export type HealthStatus = {
 
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
+export type MapDigestSummaryItem = {
+  index?: number
+  materials?: number
+  chars?: number
+}
+
+export type MapDigestDetail = {
+  content?: string
+  materials?: number
+  index?: number
+}
+
+export type MapDigestsListResponse = {
+  items?: MapDigestSummaryItem[]
+}
+
+export type ApiDetail = {
+  detail?: string
+}
+
+export type SaveDefaultPromptPayload = {
+  variant: string
+  system_prompt: string
+  user_prompt: string
+}
+
 export type Job = {
   job_id: string
   status: JobStatus
@@ -35,7 +61,27 @@ export type Job = {
   result?: {
     content?: string
     brief_kind?: string
+    map_digests_summary?: MapDigestSummaryItem[]
   }
+}
+
+export type WeeklyDefaultPromptResponse = {
+  prompt?: string
+  system_prompt?: string
+  user_prompt?: string
+  variant?: string
+  customized?: boolean
+}
+
+export type WeeklyStagePromptResponse = {
+  prompt?: string
+  customized?: boolean
+  variant?: string
+}
+
+export type CleanupBriefResponse = {
+  content?: string
+  cleanup_pass?: boolean
 }
 
 export type PeriodSource = {
@@ -70,9 +116,30 @@ export type AttachmentMeta = {
 
 export type CustomChannel = {
   channel: string
+  name?: string
   url?: string
   topic_category?: string
   added_by?: string
+  kind?: string
+  custom?: boolean
+}
+
+export type ManagedSource = {
+  name: string
+  kind?: string
+  channel?: string
+  url?: string
+  custom?: boolean
+  topic_category?: string
+  brief?: string
+  added_by?: string
+}
+
+export type CustomSourcesListResponse = {
+  categories?: string[]
+  channels?: CustomChannel[]
+  sources?: ManagedSource[]
+  disabled?: ManagedSource[]
 }
 
 export type AgentSource = {

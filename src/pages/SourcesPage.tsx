@@ -1,34 +1,56 @@
 import { FormEvent, useEffect, useState } from 'react'
 
 import { apiFetch, apiJson, jsonBody } from '~/api/client'
-import type { CustomChannel, Job } from '~/api/types'
+import type { CustomSourcesListResponse, Job, ManagedSource } from '~/api/types'
 import { Button } from '~/components/ui/Button'
 import { Card } from '~/components/ui/Card'
 
 import styles from './SourcesPage.module.scss'
+
+function sourceLabel(row: ManagedSource): string {
+  if (row.channel) return `@${row.channel}`
+  return row.name || '—'
+}
+
+function sourceHref(row: ManagedSource): string {
+  if (row.url) return row.url
+  if (row.channel) return `https://t.me/${row.channel}`
+  return ''
+}
+
+function kindLabel(row: ManagedSource): string {
+  if (row.kind === 'telegram' || row.channel) return 'Telegram'
+  return 'Web'
+}
 
 export function SourcesPage() {
   const [url, setUrl] = useState('')
   const [category, setCategory] = useState('')
   const [categories, setCategories] = useState<string[]>([])
   const [parseYesterday, setParseYesterday] = useState(true)
-  const [channels, setChannels] = useState<CustomChannel[]>([])
-  const [status, setStatus] = useState('Загрузка…')
+  const [activeSources, setActiveSources] = useState<ManagedSource[]>([])
+  const [disabledSources, setDisabledSources] = useState<ManagedSource[]>([])
+  const [activeStatus, setActiveStatus] = useState('Загрузка…')
+  const [disabledStatus, setDisabledStatus] = useState('Загрузка…')
   const [hint, setHint] = useState('')
   const [hintKind, setHintKind] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [jobId, setJobId] = useState<string | null>(null)
   const [jobLogs, setJobLogs] = useState('')
 
-  const loadChannels = async () => {
-    const data = await apiJson<{ categories?: string[]; channels?: CustomChannel[] }>('/api/custom-sources')
+  const loadSources = async () => {
+    const data = await apiJson<CustomSourcesListResponse>('/api/custom-sources')
     setCategories(data.categories || [])
-    setChannels(data.channels || [])
-    setStatus(data.channels?.length ? '' : 'Пока никто не добавлял свои каналы.')
+    const active = data.sources || []
+    const disabled = data.disabled || []
+    setActiveSources(active)
+    setDisabledSources(disabled)
+    setActiveStatus(active.length ? '' : 'Нет активных источников.')
+    setDisabledStatus(disabled.length ? '' : 'Отключённых источников нет.')
   }
 
   useEffect(() => {
-    void loadChannels()
+    void loadSources()
   }, [])
 
   useEffect(() => {
@@ -43,6 +65,7 @@ export function SourcesPage() {
         if (data.status === 'completed') {
           setHint('Парсинг завершён. Канал появится в источниках брифа.')
           setHintKind('ok')
+          await loadSources()
         } else {
           setHint(data.error || 'Парсинг не удался.')
           setHintKind('err')
@@ -82,7 +105,7 @@ export function SourcesPage() {
       }
       setUrl('')
       if (data.categories) setCategories(data.categories)
-      await loadChannels()
+      await loadSources()
       const name = data.channel?.channel || ''
       if (data.parse_job_id) {
         setHint(`Канал @${name} добавлен, парсим вчерашние посты…`)
@@ -115,18 +138,73 @@ export function SourcesPage() {
     setJobId(data.job_id)
   }
 
-  const deleteChannel = async (channel: string) => {
-    if (!window.confirm(`Удалить канал @${channel} из своих источников?`)) return
-    const res = await apiFetch(`/api/custom-sources/${encodeURIComponent(channel)}`, { method: 'DELETE' })
+  const disableSource = async (name: string) => {
+    const ok = window.confirm(
+      `Отключить источник «${name}»?\n\n` +
+        'Он перестанет парситься. Уже сохранённые новости останутся в векторной базе и будут доступны в брифе и агенте.',
+    )
+    if (!ok) return
+    const res = await apiFetch('/api/managed-sources/disable', jsonBody({ name }))
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setHint(data.detail || 'Не удалось удалить.')
+      setHint(data.detail || 'Не удалось отключить источник.')
       setHintKind('err')
       return
     }
-    setHint(`Канал @${channel} удалён.`)
-    setHintKind('')
-    await loadChannels()
+    setHint(`Источник «${name}» отключён. Новости в RAG сохранены.`)
+    setHintKind('ok')
+    await loadSources()
+  }
+
+  const restoreSource = async (name: string) => {
+    const res = await apiFetch('/api/managed-sources/restore', jsonBody({ name }))
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setHint(data.detail || 'Не удалось вернуть источник.')
+      setHintKind('err')
+      return
+    }
+    setHint(`Источник «${name}» снова в парсинге.`)
+    setHintKind('ok')
+    await loadSources()
+  }
+
+  const renderSourceRow = (row: ManagedSource, mode: 'active' | 'disabled') => {
+    const href = sourceHref(row)
+    const label = sourceLabel(row)
+    return (
+      <tr key={row.name}>
+        <td>
+          {href ? (
+            <a href={href} target='_blank' rel='noopener noreferrer'>
+              {label}
+            </a>
+          ) : (
+            label
+          )}
+          {row.custom ? <span className={styles.customBadge}>свой</span> : null}
+          <div className={styles.mutedName}>{row.name || ''}</div>
+        </td>
+        <td>{kindLabel(row)}</td>
+        <td>{row.topic_category || '—'}</td>
+        <td className={styles.actions}>
+          {mode === 'active' && row.custom && row.channel ? (
+            <Button size='sm' onClick={() => void parseChannel(row.channel!)}>
+              Парсить вчера
+            </Button>
+          ) : null}
+          {mode === 'active' ? (
+            <Button size='sm' onClick={() => void disableSource(row.name)}>
+              Удалить
+            </Button>
+          ) : (
+            <Button size='sm' onClick={() => void restoreSource(row.name)}>
+              Вернуть
+            </Button>
+          )}
+        </td>
+      </tr>
+    )
   }
 
   return (
@@ -160,45 +238,47 @@ export function SourcesPage() {
         {hint ? <p className={`${styles.hint} ${hintKind === 'ok' ? styles.ok : ''} ${hintKind === 'err' ? styles.err : ''}`}>{hint}</p> : null}
       </Card>
 
-      <Card title='Добавленные каналы'>
-        <p className={styles.help}>Они появляются в списке источников брифа в выбранной категории. Ночной парсинг (00:30 МСК) подхватывает их автоматически.</p>
-        {status ? <p className={styles.hint}>{status}</p> : null}
-        {channels.length ? (
+      <Card title='Активные источники'>
+        <p className={styles.help}>
+          Удаление <strong>только останавливает парсинг</strong>. Новости, которые уже попали в векторную базу, остаются и доступны в брифе и агенте. Свои каналы можно дополнительно спарсить за вчера.
+        </p>
+        {activeStatus ? <p className={styles.hint}>{activeStatus}</p> : null}
+        {activeSources.length ? (
           <div className={styles.tableWrap}>
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>Канал</th>
+                  <th>Источник</th>
+                  <th>Тип</th>
                   <th>Категория</th>
-                  <th>Кто добавил</th>
                   <th></th>
                 </tr>
               </thead>
-              <tbody>
-                {channels.map((row) => (
-                  <tr key={row.channel}>
-                    <td>
-                      <a href={row.url || `https://t.me/${row.channel}`} target='_blank' rel='noopener noreferrer'>
-                        @{row.channel}
-                      </a>
-                    </td>
-                    <td>{row.topic_category || '—'}</td>
-                    <td>{row.added_by || '—'}</td>
-                    <td className={styles.actions}>
-                      <Button size='sm' onClick={() => void parseChannel(row.channel)}>
-                        Парсить вчера
-                      </Button>
-                      <Button size='sm' onClick={() => void deleteChannel(row.channel)}>
-                        Удалить
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+              <tbody>{activeSources.map((row) => renderSourceRow(row, 'active'))}</tbody>
             </table>
           </div>
         ) : null}
         {jobLogs ? <pre className={styles.log}>{jobLogs}</pre> : null}
+      </Card>
+
+      <Card title='Отключённые источники'>
+        <p className={styles.help}>Их можно вернуть в парсинг. Исторические новости в RAG при этом не меняются.</p>
+        {disabledStatus ? <p className={styles.hint}>{disabledStatus}</p> : null}
+        {disabledSources.length ? (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Источник</th>
+                  <th>Тип</th>
+                  <th>Категория</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>{disabledSources.map((row) => renderSourceRow(row, 'disabled'))}</tbody>
+            </table>
+          </div>
+        ) : null}
       </Card>
     </>
   )
