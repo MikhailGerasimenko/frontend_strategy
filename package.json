@@ -61,9 +61,9 @@
     "*.{scss,css,json,md}": "prettier --write"
   },
   "overrides": {
-    "immutable": "5.1.5",
-    "flatted": "3.4.2",
-    "postcss": "8.5.12"
+    "immutable": "5.1.9",
+    "flatted": "3.4.4",
+    "postcss": "8.5.30"
   },
   "license": "MIT"
 }
