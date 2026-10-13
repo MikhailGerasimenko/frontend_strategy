@@ -4,12 +4,12 @@ global:
     tag: 1.13
 
 secrets:
-  enabled: true
-  projectNamespace: ""
+  enabled: false
+  projectNamespace: "$CI_PROJECT_NAMESPACE"
   backend: "eso-vault-backend"
   files: {}
   tls:
-    common: false
+    common: true
 
 deployment:
   replicas: 1
@@ -47,7 +47,7 @@ ingress:
   enabled: true
   className: nginx-internal
   annotations: {}
-  host: generic-app.severstal.com
+  host: frontend-dev.kube.severstal.severstalgroup.com
   paths:
     - path: /
       port: 8080

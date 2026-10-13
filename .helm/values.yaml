@@ -20,7 +20,9 @@ global:
 
 secrets:
   # -- Use external secrets or not
-  enabled: true
+  # Фронт — статика в nginx, Vault-секреты не нужны.
+  # Если enabled=true без пути в Vault, pod ждёт несуществующий Secret и ссылка «не открывается».
+  enabled: false
 
   # -- Kind of external secret backend
   kind: "ClusterSecretStore"
@@ -29,7 +31,7 @@ secrets:
   backend: "eso-vault-backend"
 
   # -- Secret path in Vault secret backend
-  projectNamespace: ""
+  projectNamespace: "$CI_PROJECT_NAMESPACE"
 
   # -- Refresh interval of secret
   refreshInterval: 30m
@@ -61,7 +63,7 @@ secrets:
   tls:
 
     # -- If `true`, *.kube.severstalgroup.severstal.com TLS will be created from `common/tls/` Vault path. If false, TLS must be in `projectNamespace/tls` Vault path
-    common: false
+    common: true
 
     # -- Works only if tls.common is `false`. If exist, overwrite `projectNamespace/tls` to custom Vault path
     customPath: ""
@@ -284,8 +286,8 @@ ingress:
   additionalLabels: {}
   #   additional-label: value-additional-label
 
-  # -- Ingress host
-  host: generic-app.severstal.com
+  # -- Ingress host (SSS: <service>-<env>.kube.severstal.severstalgroup.com)
+  host: frontend-dev.kube.severstal.severstalgroup.com
   paths:
     - path: /
       port: 8080
