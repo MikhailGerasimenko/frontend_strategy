@@ -17,6 +17,25 @@ deployment:
   replicas: 1
   reloadOnChange:
     enabled: true
+  ports:
+    - containerPort: 8080
+      name: http
+      protocol: TCP
+  probes:
+    startupProbe:
+      tcpSocket:
+        port: 8080
+      failureThreshold: 10
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    livenessProbe:
+      tcpSocket:
+        port: 8080
+      periodSeconds: 30
+    readinessProbe:
+      tcpSocket:
+        port: 8080
+      periodSeconds: 30
 
 service:
   type: ClusterIP

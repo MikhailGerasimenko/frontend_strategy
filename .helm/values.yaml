@@ -128,10 +128,10 @@ deployment:
   command: "" #['sh', '-c', 'binary_package']
 
   # -- Deployment ports to expose
-  ports: []
-  # - containerPort: 80
-  #   name: http
-  #   protocol: TCP
+  ports:
+    - containerPort: 8080
+      name: http
+      protocol: TCP
   # - containerPort: 8778
 
   # -- Deployment host aliases
@@ -171,21 +171,21 @@ deployment:
   #     cpu: 0.1
 
   # -- Deployment probes
-  probes: {}
-  #   startupProbe:
-  #     tcpSocket:
-  #       port: 80
-  #     failureThreshold: 10
-  #     initialDelaySeconds: 5
-  #     periodSeconds: 10
-  #   livenessProbe:
-  #     tcpSocket:
-  #       port: 80
-  #     periodSeconds: 30
-  #   readinessProbe:
-  #     tcpSocket:
-  #       port: 80
-  #     periodSeconds: 30
+  probes:
+    startupProbe:
+      tcpSocket:
+        port: 8080
+      failureThreshold: 10
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    livenessProbe:
+      tcpSocket:
+        port: 8080
+      periodSeconds: 30
+    readinessProbe:
+      tcpSocket:
+        port: 8080
+      periodSeconds: 30
 
   # -- Deployment security context
   securityContext: {}
